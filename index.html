@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>课时预交追踪</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #8a8f99;
+    --primary: #3b82f6;
+    --primary-weak: #e8f0fe;
+    --danger: #ef4444;
+    --border: #e5e7eb;
+    --highlight: #10b981;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121417;
+      --card: #1d2025;
+      --text: #eceff3;
+      --muted: #9aa1ab;
+      --primary: #60a5fa;
+      --primary-weak: #243247;
+      --danger: #f87171;
+      --border: #2c3138;
+      --highlight: #34d399;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 14px 40px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 14px; }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+  }
+  .section-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+
+  /* 统计卡片 */
+  .stats { display: flex; }
+  .stat { flex: 1; text-align: center; }
+  .stat b { display: block; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .stat.remain b { color: var(--highlight); }
+
+  /* 追加课时表单 */
+  .form-row { display: flex; gap: 10px; }
+  input[type=number] {
+    flex: 1;
+    min-width: 0;
+    font-size: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  button {
+    font-size: 15px;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 10px;
+    background: var(--primary);
+    color: #fff;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:active { opacity: .85; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* 待上课列表 */
+  .lesson {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 52px;
+    border-bottom: 1px solid var(--border);
+  }
+  .lesson:last-child { border-bottom: none; }
+  .lesson label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    cursor: pointer;
+    padding: 6px 0;
+  }
+  .lesson input[type=checkbox] {
+    width: 26px;
+    height: 26px;
+    accent-color: var(--highlight);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .lesson .name { font-size: 16px; }
+  .lesson .idx { color: var(--muted); font-size: 13px; margin-right: 2px; font-variant-numeric: tabular-nums; }
+  .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 22px 0; }
+
+  /* 已完成报告 */
+  .report-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    min-height: 44px;
+    padding: 4px 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .report-head .arrow { color: var(--muted); transition: transform .15s; }
+  .report-head.open .arrow { transform: rotate(90deg); }
+  .report-body { display: none; margin-top: 6px; }
+  .report-body.open { display: block; }
+  .date-group { margin-bottom: 14px; }
+  .date-group:last-child { margin-bottom: 0; }
+  .date-group h3 { font-size: 14px; color: var(--primary); margin-bottom: 6px; }
+  .record {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 14px;
+  }
+  .record:last-child { border-bottom: none; }
+  .record .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .undo-btn { background: transparent; color: var(--danger); padding: 8px 12px; font-size: 13px; }
+
+  /* 数据备份 */
+  .backup { display: flex; gap: 10px; }
+  .backup button { flex: 1; background: var(--primary-weak); color: var(--primary); font-size: 14px; padding: 12px 0; }
+</style>
+</head>
+<body>
+
+<h1>课时预交追踪</h1>
+
+<div class="card">
+  <div class="stats">
+    <div class="stat"><b id="statPrepaid">0</b><span>预交课时</span></div>
+    <div class="stat"><b id="statUsed">0</b><span>已用课时</span></div>
+    <div class="stat remain"><b id="statRemain">0</b><span>剩余课时</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-title">预交 / 追加课时</div>
+  <div class="form-row">
+    <input type="number" id="addCount" value="10" min="1" inputmode="numeric">
+    <button id="addBtn">追加</button>
+  </div>
+  <div class="hint">首次填入即预交课时，之后可随时追加，默认 10 节。</div>
+</div>
+
+<div class="card">
+  <div id="pendingList"></div>
+</div>
+
+<div class="card">
+  <div class="report-head" id="reportHead">
+    <span id="reportTitle">已完成 0 节</span>
+    <span class="arrow">&#9656;</span>
+  </div>
+  <div class="report-body" id="reportBody"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">数据备份</div>
+  <div class="backup">
+    <button id="exportBtn">导出备份</button>
+    <button id="importBtn">导入恢复</button>
+  </div>
+  <input type="file" id="importFile" accept=".json,application/json" hidden>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var KEY = 'coursePrepaidTracker';
+  var $ = function (id) { return document.getElementById(id); };
+
+  var state = load();
+  var reportOpen = false;
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return { prepaid: 0, used: [] };
+      var data = JSON.parse(raw);
+      return {
+        prepaid: Math.max(0, Math.floor(Number(data.prepaid)) || 0),
+        used: Array.isArray(data.used) ? data.used : []
+      };
+    } catch (e) {
+      return { prepaid: 0, used: [] };
+    }
+  }
+
+  function save() {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function fmtTime(d) {
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function render() {
+    var usedCount = state.used.length;
+    var remain = Math.max(0, state.prepaid - usedCount);
+
+    $('statPrepaid').textContent = state.prepaid;
+    $('statUsed').textContent = usedCount;
+    $('statRemain').textContent = remain;
+
+    // 待上课列表
+    var list = $('pendingList');
+    list.innerHTML = '';
+    if (remain <= 0) {
+      list.innerHTML = '<div class="empty">暂无待上课时，可在上方追加</div>';
+    } else {
+      for (var i = 1; i <= remain; i++) {
+        var lessonNo = usedCount + i; // 动态序号：即将上的第几节课
+        var row = document.createElement('div');
+        row.className = 'lesson';
+        var label = document.createElement('label');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        label.appendChild(cb);
+        var name = document.createElement('span');
+        name.className = 'name';
+        var idx = document.createElement('span');
+        idx.className = 'idx';
+        idx.textContent = '#' + i;
+        name.appendChild(idx);
+        name.appendChild(document.createTextNode(' 第 ' + lessonNo + ' 节课'));
+        label.appendChild(name);
+        row.appendChild(label);
+        list.appendChild(row);
+      }
+    }
+
+    // 已完成报告（默认收起）
+    $('reportTitle').textContent = '已完成 ' + usedCount + ' 节';
+    $('reportHead').classList.toggle('open', reportOpen);
+    var body = $('reportBody');
+    body.classList.toggle('open', reportOpen);
+    body.innerHTML = '';
+    if (usedCount === 0) {
+      body.innerHTML = '<div class="empty">还没有完成的课时记录</div>';
+    } else {
+      var groups = {};
+      state.used.forEach(function (u) {
+        var date = u.time.slice(0, 10);
+        if (!groups[date]) groups[date] = [];
+        groups[date].push(u);
+      });
+      Object.keys(groups).sort().reverse().forEach(function (date) {
+        var g = document.createElement('div');
+        g.className = 'date-group';
+        var h = document.createElement('h3');
+        h.textContent = date + '（当天完成 ' + groups[date].length + ' 节）';
+        g.appendChild(h);
+        groups[date].slice().reverse().forEach(function (u) {
+          var rec = document.createElement('div');
+          rec.className = 'record';
+          var t = document.createElement('span');
+          t.className = 't';
+          t.textContent = u.time.slice(11); // HH:mm
+          var btn = document.createElement('button');
+          btn.className = 'undo-btn';
+          btn.textContent = '撤销';
+          btn.dataset.id = u.id;
+          rec.appendChild(t);
+          rec.appendChild(btn);
+          g.appendChild(rec);
+        });
+        body.appendChild(g);
+      });
+    }
+  }
+
+  function completeLesson() {
+    if (state.used.length >= state.prepaid) return;
+    state.used.push({ id: Date.now(), time: fmtTime(new Date()) });
+    save();
+    render();
+  }
+
+  function undoLesson(id) {
+    state.used = state.used.filter(function (u) { return String(u.id) !== String(id); });
+    save();
+    render();
+  }
+
+  // 事件绑定一次，委托处理
+  $('pendingList').addEventListener('change', function (e) {
+    if (e.target.matches('input[type="checkbox"]')) {
+      completeLesson();
+      e.target.checked = false;
+    }
+  });
+
+  $('reportBody').addEventListener('click', function (e) {
+    var btn = e.target.closest('.undo-btn');
+    if (btn) undoLesson(btn.dataset.id);
+  });
+
+  $('reportHead').addEventListener('click', function () {
+    reportOpen = !reportOpen;
+    render();
+  });
+
+  $('addBtn').addEventListener('click', function () {
+    var v = Math.floor(Number($('addCount').value));
+    if (!Number.isFinite(v) || v < 1) {
+      alert('请输入大于 0 的整数课时');
+      return;
+    }
+    state.prepaid += v;
+    save();
+    render();
+  });
+
+  $('addCount').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') $('addBtn').click();
+  });
+
+  // 导出备份
+  $('exportBtn').addEventListener('click', function () {
+    var blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var d = new Date();
+    a.href = url;
+    a.download = 'course-tracker-backup-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  });
+
+  // 导入恢复
+  function validateBackup(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('文件格式无效');
+    if (!Number.isFinite(Number(data.prepaid)) || Number(data.prepaid) < 0) throw new Error('prepaid 字段无效');
+    if (!Array.isArray(data.used)) throw new Error('used 字段无效');
+    data.used.forEach(function (u) {
+      if (!u || !('id' in u) || typeof u.time !== 'string') throw new Error('已完成记录字段无效');
+    });
+  }
+
+  $('importBtn').addEventListener('click', function () {
+    $('importFile').click();
+  });
+
+  $('importFile').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    e.target.value = ''; // 允许重复选择同一文件
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        validateBackup(data);
+        if (!confirm('导入将覆盖当前数据，是否继续？')) return;
+        state = {
+          prepaid: Math.max(0, Math.floor(Number(data.prepaid)) || 0),
+          used: data.used
+        };
+        save();
+        render();
+      } catch (err) {
+        alert('导入失败：' + (err && err.message ? err.message : '文件无效'));
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
